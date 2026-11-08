@@ -1,0 +1,9 @@
+# Ignore path budget: this file <1 KiB; generated dependencies/caches never enter the bundle.
+**/node_modules/
+**/.vite/
+**/.npm/
+**/.cache/
+**/coverage/
+test/scratch/
+*.tsbuildinfo
+# dist/ is the required, tracked static export.
