@@ -6,7 +6,7 @@ A playable, single-player logistics game for Squeekchain Genesis. Start with 120
 
 ## Install, develop and rebuild
 
-Use Node 22 or later and npm:
+Use Node 22.12 or later and npm:
 
 ```sh
 npm ci
@@ -17,9 +17,25 @@ npm run build
 npm run preview
 ```
 
-`npm run build` typechecks the complete TypeScript project and builds `dist/index.html` with its local assets. Vite uses `base: './'`; navigation is contained in one page. The export was exercised under a nested `/preview/squeek/` URL. Hosting is a separate network step; this repository does not publish itself.
+`npm run build` typechecks the complete TypeScript project, regenerates the standalone Core validator in Node, and builds `dist/index.html` with its local assets. Its Vite plugin rejects runtime string evaluation and accidental inclusion of the Ajv compiler. Vite uses `base: './'`; navigation is contained in one page. The production export was exercised under a nested `/preview/squeek/` URL with an enforced CSP. Hosting is a separate network step; this repository does not publish itself.
 
 No font, image or game asset requires an external service at runtime. The public Squeekchain API is the only external runtime read. A network outage leaves the starter game and saved unlocks playable.
+
+## CSP blank-screen fix
+
+The failing dependency was **Ajv 8.20.0**, called during module initialization in `src/integration/core.ts`. Its schema compiler constructed a function from a string at **`dist/assets/index-CsNp8EDF.js:203:27558`** in the original export. This threw before React mounted; the old `#root` stayed empty. See [`docs/csp-diagnosis.md`](docs/csp-diagnosis.md) for the exact dependency source, captured stack and repair.
+
+The browser now imports `src/integration/core-validator.generated.mjs`, an ordinary ESM validator generated from the **unchanged official schema**. Custom uint64/96/256 formats, complete schema validation, deployment identities, settled accounting, freshness and unlock rules are preserved. Ajv runs only in the Node generation step, following its [standalone validation guidance](https://ajv.js.org/standalone.html). Package manifests and lockfiles are unchanged. No hosting policy was changed and no eval permission was added.
+
+The checked-in generated module lets typechecking work immediately after install. Normal Vite builds regenerate it automatically. To regenerate or audit explicitly:
+
+```sh
+node scripts/generate-core-validator.mjs
+node scripts/generate-core-validator.mjs --check
+node scripts/check-csp.mjs dist
+```
+
+A React error boundary displays a focused, visible error screen with **Reload game**. The bootstrap catches application-chunk, uncaught event/timer and promise failures. Static HTML also supplies a product name and reload link if JavaScript never starts. Errors remain available in Console; recovery does not reset or clear local saves. Progress that could not be saved before a failure can still be lost.
 
 ## Controls and first delivery
 
@@ -81,7 +97,7 @@ The supplied `https://docs.squeekchain.com/sepolia.json` returned HTTP 404. The 
 
 Before a snapshot can unlock content, the client:
 
-- Validates the complete schema/version/status with Ajv, including bounded unsigned decimal formats.
+- Validates the complete schema/version/status with the precompiled Ajv standalone function, including bounded unsigned decimal formats; the compiler never runs in the browser.
 - Requires Ethereum Sepolia **11155111** and SqueekCore **`0xfd6c166d4b8e2962e65746a13e5a0797cd4de0c4`**.
 - Matches the proxy implementation, implementation code address, runtime hash, storage-layout digest, ProxyAdmin, admin slot and governance identities against that official record.
 - Checks deployment/indexed/safe block coverage and `cumulativeBlockUnits = blockHeight × 10^9 + blockProgress` using BigInt.
@@ -101,21 +117,30 @@ Saves are local, editable game data, not authenticated attestations or cloud acc
 
 ## Validation and limitations
 
-See [`VALIDATION.md`](VALIDATION.md) for actual commands, coverage, fixes and remaining limits. The delivered source and export have:
+See [`VALIDATION.md`](VALIDATION.md) for the current commands, six-domain interface review, evidence and limitations. This revision passed production build, standalone TypeScript checking, **59 tests** (the original 44 plus 15 CSP regressions), production-bundle AST audit, and the pinned **16/16 taste@1** checks.
 
-- Production build and standalone TypeScript typecheck passes.
-- **44 engine/integration tests**, including timer boundaries, economy invariants, 500 seeded actions, a 15-delivery playthrough, milestone boundaries, saves, ETag, 429 and unavailable API behavior.
-- A Chromium interaction walk using actual 5s gathering, 18s delivery, 8s construction and 12s production timers; reload, export, invalid/valid import, confirmation/reset, surplus trade, and error recovery.
-- Responsive inspection at 320, 390, 768, 1000 and 1440 pixels. The product, gather action and world are on the first 390px screen. Axe checks and the pinned taste@1 design probe are recorded in validation.
+Chromium exercised all five game screens, actual gathering/construction/production/delivery timers, save reload/export/import/reset, storage errors and responsive layouts at 320, 390, 768, 1000 and 1440px under an enforced policy with `script-src 'self'`. Normal gameplay produced zero fatal errors, console errors or CSP violations. Forced render/effect, application-chunk, timer and promise failures displayed the recovery screen; reload preserved saved progress. Static fallback was also checked with JavaScript disabled. Current results and representative screenshots are in [`artifacts/`](artifacts/).
 
-The browser connector was unavailable. The installed Chromium fallback performed the interaction checks. Its unmocked external API request returned `net::ERR_EMPTY_RESPONSE`, while curl successfully retrieved and validated live official data. Browser success scenarios use an explicitly intercepted, genuine observed response; they do **not** establish live browser connectivity. The production client still calls the real API directly and displays UNKNOWN on failure. WebKit was unavailable, so Safari remains unverified. Physical-device, screen-reader and native-browser zoom checks were not performed. No cloud save, wallet, multiplayer, token reward, mainnet integration or independently verified RPC attestation is provided.
+Run the repeatable interaction check with a Playwright browser installed:
 
-The repeatable contributor browser check is `node scripts/browser-check.mjs` with the assigned Playwright runtime; it owns and closes a temporary local preview. `scripts/render-share.mjs` rasterizes the original SVG share artwork; the committed PNG is already included, so normal builds need no browser. No dependencies, caches or package archives are vendored. `.gitignore` has an explicit **1 KiB path budget**, excluding dependencies/caches at every nesting level while leaving `dist/` eligible for submission. No staging, commits, publishing or `.git/` edits are performed by this implementation.
+```sh
+npm exec -- playwright-core install chromium
+node scripts/browser-check.mjs
+```
+
+The locked tool dependencies provide `playwright-core`. If the contributor runtime supplies a different installed Playwright module, point `IMD_PLAYWRIGHT` at its `index.mjs`; use `PLAYWRIGHT_BROWSERS_PATH` when its browser binaries live outside Playwright's default location. The script owns and closes its temporary production preview and browser, writes only to `test/scratch/interaction/`, and sets a strict script policy on its test server. The negative-control scenario intentionally attempts forbidden evaluation to prove that this policy is enforced; it is never part of `dist/`.
+
+The supplied browser connector could not start because its configured Chrome executable was absent; the installed Chromium fallback provided the rendered checks. The unmocked external API read failed (`Failed to fetch`) and the game correctly showed UNKNOWN. Successful integration browser scenarios explicitly intercept the historical real response in `tests/fixtures/core-observed.json`; this proves validator/UI behavior, not live connectivity. The ENS gateway attempt also returned `net::ERR_EMPTY_RESPONSE`. The updated public deployment cannot be checked before the separate publisher installs this export; only the served production preview is verified here. WebKit was unavailable. Physical-device, screen-reader and native-browser zoom checks were not performed.
+
+No dependencies, caches, npm registries or package archives are vendored. The existing `.gitignore` remains unchanged with its explicit **1 KiB path budget**, excluding dependencies/caches at every nesting level while keeping `dist/` eligible for submission. The final export and source fit the 8 MiB limit; precise conservative byte totals are in validation. The submission process performs the eventual Git commit and publication.
 
 ## Source map
 
 - `src/game.ts`: pure simulation, contracts, economy, timers, versioned saves.
 - `src/integration/core.ts`: fail-closed public API client and deployment/schema validation.
+- `src/integration/core-validator.generated.mjs`, `scripts/generate-core-validator.mjs`: committed standalone validator and build-only compiler.
+- `src/GameErrorBoundary.tsx`, `src/main.tsx`, `src/fallback.css`: error recovery and safe startup.
+- `scripts/check-csp.mjs`, `tests/csp.test.ts`: build guard, schema parity and no-evaluation regressions.
 - `src/World.tsx`, `src/PixelIcon.tsx`: original procedural pixel art and interactive plots.
 - `src/App.tsx`, `src/style.css`: game controls, responsive UI and accessible dialogs.
 - `tests/`: engine/integration tests and an explicitly historical real-response fixture.

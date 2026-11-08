@@ -77,6 +77,8 @@ Dense map pins are at least 30px; standard buttons are 40px desktop, 44px for ke
 | `buildingPanel` | `src/App.tsx` | Build/upgrade cost, construction state, level gate, global gate, storage/fleet or timed recipes. Queue slots and reserved capacity determine availability. |
 | Contract / dispatch | `src/App.tsx` | Local order, cargo readiness and base reward; Prepare opens a dialog with route/vehicle selectors and the exact trip quote. |
 | `Modal` | `src/App.tsx` | Native `dialog.showModal()`, named heading, close button, Escape dismissal, focus restoration. Save reset/import require explicit confirmation. |
+| `GameErrorBoundary` / `GameErrorScreen` | `src/GameErrorBoundary.tsx`, `src/main.tsx` | Rendering/effect failures and uncaught startup/runtime errors replace the game with one visible recovery view. The heading receives focus, the error is announced, and Reload game retries without clearing saves. Console retains the underlying error. |
+| Static startup fallback | `index.html`, `src/fallback.css` | Product name, plain loading/recovery guidance and a native Reload game link exist before JavaScript executes. A noscript paragraph explains the JavaScript requirement. |
 | Save controls | `src/App.tsx` | Device-local autosave, export/import, unsupported-file errors, memory-only recovery, typed reset confirmation. |
 | `tradeBonus` | `src/App.tsx` | Saved three-type cargo mix with visible progress and a fixed reward. Reuses resource icons and standard status copy. |
 | Genesis panel | `src/App.tsx`, `src/integration/core.ts` | Verified settled state or UNKNOWN. Source, check time, retry state and saved historical unlock evidence are separate. |
@@ -94,6 +96,16 @@ The app has meaningful empty queues/shipments, loading/unknown Core states, insu
 - Add routes through `ROUTES`, buildings through `BUILDING`, and simulation changes through the pure engine. Include costs, capacity, timer, save and failure-state coverage.
 - Keep asset URLs relative and game assets local. Do not add wallet infrastructure, claimed monetary rewards, cloud saves or apparent live players to this single-player game.
 
+## Failure and startup surfaces
+
+The CSP repair retains the game layout, tokens, type, art and interactions. `src/fallback.css` styles both the HTML boot content and `GameErrorScreen`; it reuses the semantic tokens in `src/style.css` with exact hex/size fallbacks so recovery remains legible when only the startup stylesheet is available.
+
+The recovery surface is at most 520px wide, has 24px padding, a 6px radius, a 1px `--color-border` border and no shadow. Desktop margins are `10vh auto`. At 600px and below it uses 24px vertical / 16px horizontal margins and 20px padding. Text wraps, including long words. There is no fixed text height. It uses 20px/700 headings at 1.4 line height, 14px body/actions at 1.6, and 12px muted guidance. Reload game is at least 44px high; its solid accent, hover accent and 3px focus ring use the existing tokens. Forced-colors mode preserves control/surface borders. No new animation, font, image or palette was introduced.
+
+The error view has one main landmark and one h1; React recovery focuses that h1 with `tabIndex=-1`, while the reload button remains in the normal tab order. Recovery never clears localStorage. It does not promise to restore progress that had not been saved. A native reload link in the initial HTML works without event handlers. Underlying errors are logged for diagnosis, rather than rendered as technical details in the product UI.
+
+The final export was reviewed with the pinned Better Interface guide in all six domains and passed all 16 taste@1 checks. The 390px first screen still contains product identification, the gather action and the world. Chromium exercised all game views at 320, 390, 768, 1000 and 1440px with no horizontal document overflow. The error screen was inspected at 390px and passed Axe; reload preserved the saved outpost. See `VALIDATION.md` for current evidence and the limits of the live API/gateway, WebKit, screen-reader, zoom and canvas-contrast checks.
+
 ## Guidance attribution
 
-The implementation and review used the supplied Better Interface guide by Jakub Krehel (MIT, commit `267330e1adfc66a718fb65fa6918c1f06d0a689e`) and its documentation method adapted from Paul Bakaus’s Impeccable (Apache-2.0, commit `9d715cc4f5564a990ca8345abfdd5df6dc9b41c8`). Original notices/license texts are preserved in [`docs/design-guide-LICENSE.txt`](docs/design-guide-LICENSE.txt). The game’s artwork and mechanics were authored for this assignment.
+The implementation and review used the supplied Better Interface guide by Jakub Krehel (MIT, commit `267330e1adfc66a718fb65fa6918c1f06d0a689e`) and its documentation method adapted from Paul Bakaus’s Impeccable (Apache-2.0, commit `9d715cc4f5564a990ca8345abfdd5df6dc9b41c8`). Original notices/license texts are preserved in [`docs/design-guide-LICENSE.txt`](docs/design-guide-LICENSE.txt). The game’s original artwork and mechanics are retained from the preceding implementation.

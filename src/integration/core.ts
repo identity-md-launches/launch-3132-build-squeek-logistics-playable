@@ -1,6 +1,4 @@
-import Ajv2020 from 'ajv/dist/2020.js';
-import addFormats from 'ajv-formats';
-import schema from './core.schema.json';
+import validate from './core-validator.generated.mjs';
 import deployment from './sepolia.json';
 
 export const CORE_URL = 'https://api.squeekchain.com/v1/core';
@@ -8,12 +6,6 @@ export const DEPLOYMENT_URL = 'https://docs.squeekchain.com/assets/deployments/s
 export const EXPECTED_CORE = '0xfd6c166d4b8e2962e65746a13e5a0797cd4de0c4';
 export const MAX_AGE = 120_000;
 export const STALLED_HEAD = 300_000;
-const ajv = new Ajv2020({ strict: false, allErrors: true });
-addFormats(ajv);
-for (const bits of [64, 96, 256]) {
-  ajv.addFormat(`uint${bits}-decimal`, { type: 'string', validate: (s: string) => /^(0|[1-9][0-9]*)$/.test(s) && s.length <= 78 && BigInt(s) < 2n ** BigInt(bits) });
-}
-const validate = ajv.compile(schema);
 export type CorePayload = {
   schemaVersion: 1; status: 'available'; installationId: string;
   chain: { target: string; chainId: string; confirmations: string; safeThroughBlock: string; indexedThroughBlock: string; deploymentBlock: string };
